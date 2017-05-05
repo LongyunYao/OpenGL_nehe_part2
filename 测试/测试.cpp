@@ -50,58 +50,73 @@ GLuint	texture[1];			// Storage For One Texture ( NEW )
 
 LRESULT	CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);	// Declaration For WndProc
 
-
-AUX_RGBImageRec *LoadBMP(char *Filename)				// Loads A Bitmap Image
+//尝试打开文件，如果存在就返回文件的指针，如果不存在就返回null
+AUX_RGBImageRec *LoadBMP(char *Filename)			// Loads A Bitmap Image
 {
-	FILE *File = NULL;									// File Handle
+	FILE *File = NULL;								// File Handle
 
-	if (!Filename)										// Make Sure A Filename Was Given
+	if (!Filename)									// Make Sure A Filename Was Given
 	{
-		return NULL;									// If Not Return NULL
+		return NULL;								// If Not Return NULL
 	}
 
-	File = fopen(Filename, "r");							// Check To See If The File Exists
+	File = fopen(Filename, "r");					// Check To See If The File Exists
 
-	if (File)											// Does The File Exist?
+	if (File)										// Does The File Exist?
 	{
-		fclose(File);									// Close The Handle
-		return auxDIBImageLoad(Filename);				// Load The Bitmap And Return A Pointer
+		fclose(File);								// Close The Handle
+		return auxDIBImageLoad(Filename);			// Load The Bitmap And Return A Pointer
 	}
 
-	return NULL;										// If Load Failed Return NULL
+	return NULL;									// If Load Failed Return NULL
 }
 
 
-int LoadGLTextures()									// Load Bitmaps And Convert To Textures
+int LoadGLTextures()								// Load Bitmaps And Convert To Textures
 {
-	int Status = FALSE;									// Status Indicator
+	int Status = FALSE;								// Status Indicator
+	//TextureImage用来存放从位图中获取的纹理
+	AUX_RGBImageRec *TextureImage[1];				// Create Storage Space For The Texture
 
-	AUX_RGBImageRec *TextureImage[1];					// Create Storage Space For The Texture
+	memset(TextureImage, 0, sizeof(void *) * 1);    // Set The Pointer To NULL
 
-	memset(TextureImage, 0, sizeof(void *) * 1);           	// Set The Pointer To NULL
-
-															// Load The Bitmap, Check For Errors, If Bitmap's Not Found Quit
+													// Load The Bitmap, Check For Errors, If Bitmap's Not Found Quit
+	//尝试加载位图，并将其转换为纹理。
 	if (TextureImage[0] = LoadBMP("Data/NeHe.bmp"))
 	{
-		Status = TRUE;									// Set The Status To TRUE
-
+		Status = TRUE;								// Set The Status To TRUE
+		//现在使用中 TextureImage[0] 的数据创建纹理。
+		//第一行 glGenTextures(1, &texture[0]) 告诉OpenGL我们想生成一个纹理名字(如果您想载入多个纹理，加大数字)。
 		glGenTextures(1, &texture[0]);					// Create The Texture
-
-														// Typical Texture Generation Using Data From The Bitmap
+		//第二行 glBindTexture(GL_TEXTURE_2D, texture[0]) 告诉OpenGL将纹理名字 texture[0] 绑定到纹理目标上。
+													// Typical Texture Generation Using Data From The Bitmap
+		//// 使用来自位图数据生成 的典型纹理
 		glBindTexture(GL_TEXTURE_2D, texture[0]);
+
+		//下来我们创建真正的纹理。
+		//下面一行告诉OpenGL此纹理是一个2D纹理 ( GL_TEXTURE_2D )。
+		//参数“0”代表图像的详细程度，通常就由它为零去了。
+		//参数三是数据的成分数。因为图像是由红色数据，绿色数据，蓝色数据三种组分组成。 
+		//TextureImage[0]->sizeX 是纹理的宽度。如果您知道宽度，您可以在这里填入，但计算机可以很容易的为您指出此值。
+		//TextureImage[0]->sizey 是纹理的高度。
+		//参数零是边框的值，一般就是“0”。 
+		//GL_RGB 告诉OpenGL图像数据由红、绿、蓝三色数据组成。
+		//GL_UNSIGNED_BYTE 意味着组成图像的数据是无符号字节类型的。
+		//最后... TextureImage[0]->data 告诉OpenGL纹理数据的来源。此例中指向存放在 TextureImage[0] 记录中的数据。 
 		glTexImage2D(GL_TEXTURE_2D, 0, 3, TextureImage[0]->sizeX, TextureImage[0]->sizeY, 0, GL_RGB, GL_UNSIGNED_BYTE, TextureImage[0]->data);
+		//下面的两行告诉OpenGL在显示图像时，当它比放大得原始的纹理大 ( GL_TEXTURE_MAG_FILTER )或缩小得比原始得纹理小( GL_TEXTURE_MIN_FILTER )时OpenGL采用的滤波方式。
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	}
-
-	if (TextureImage[0])									// If Texture Exists
+	//将
+	if (TextureImage[0])								// If Texture Exists
 	{
-		if (TextureImage[0]->data)							// If Texture Image Exists
+		if (TextureImage[0]->data)						// If Texture Image Exists
 		{
-			free(TextureImage[0]->data);					// Free The Texture Image Memory
+			free(TextureImage[0]->data);				// Free The Texture Image Memory
 		}
 
-		free(TextureImage[0]);								// Free The Image Structure
+		free(TextureImage[0]);							// Free The Image Structure
 	}
 
 	return Status;										// Return The Status
