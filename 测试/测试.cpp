@@ -38,15 +38,27 @@ HINSTANCE       hInstance;		// 保存程序的实例
 bool    keys[256];				// 保存键盘按键的数组   
 bool    active = TRUE;			// 窗口的活动标志，缺省为TRUE   
 bool    fullscreen = TRUE;		// 全屏标志缺省，缺省设定成全屏模式 
+bool	light;				// Lighting ON/OFF ( NEW )
+bool	lp;					// L Pressed? ( NEW )
+bool	fp;					// F Pressed? ( NEW )
+
+
+GLfloat	xrot;				// X Rotation
+GLfloat	yrot;				// Y Rotation
+GLfloat zrot;
+GLfloat xspeed;				// X Rotation Speed
+GLfloat yspeed;				// Y Rotation Speed
+GLfloat	z = -5.0f;			// Depth Into The Screen
 
 GLfloat	rtri;				// Angle For The Triangle ( NEW )
 GLfloat	rquad;				// Angle For The Quad ( NEW )
 
-GLfloat	xrot;				// X Rotation ( NEW )
-GLfloat	yrot;				// Y Rotation ( NEW )
-GLfloat	zrot;				// Z Rotation ( NEW )
+GLuint	filter;				// Which Filter To Use
+GLuint	texture[3];			// Storage For 3 Textures
 
-GLuint	texture[1];			// Storage For One Texture ( NEW )
+GLfloat LightAmbient[] = { 0.5f, 0.5f, 0.5f, 1.0f };
+GLfloat LightDiffuse[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+GLfloat LightPosition[] = { 0.0f, 0.0f, 2.0f, 1.0f };
 
 LRESULT	CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);	// Declaration For WndProc
 
@@ -82,28 +94,32 @@ int LoadGLTextures()								// Load Bitmaps And Convert To Textures
 
 													// Load The Bitmap, Check For Errors, If Bitmap's Not Found Quit
 	//尝试加载位图，并将其转换为纹理。
-	if (TextureImage[0] = LoadBMP("Data/NeHe.bmp"))
+	if (TextureImage[0] = LoadBMP("Data/Crate.bmp"))
 	{
 		Status = TRUE;								// Set The Status To TRUE
 		//现在使用中 TextureImage[0] 的数据创建纹理。
 		//第一行 glGenTextures(1, &texture[0]) 告诉OpenGL我们想生成一个纹理名字(如果您想载入多个纹理，加大数字)。
-		glGenTextures(1, &texture[0]);					// Create The Texture
+		glGenTextures(3, &texture[0]);					// Create The Texture
 		//第二行 glBindTexture(GL_TEXTURE_2D, texture[0]) 告诉OpenGL将纹理名字 texture[0] 绑定到纹理目标上。
-													// Typical Texture Generation Using Data From The Bitmap
-		//// 使用来自位图数据生成 的典型纹理
+		
+		// Create Nearest Filtered Texture
 		glBindTexture(GL_TEXTURE_2D, texture[0]);
-
-		//下来我们创建真正的纹理。
-		//下面一行告诉OpenGL此纹理是一个2D纹理 ( GL_TEXTURE_2D )。
-		//参数“0”代表图像的详细程度，通常就由它为零去了。
-		//参数三是数据的成分数。因为图像是由红色数据，绿色数据，蓝色数据三种组分组成。 
-		//TextureImage[0]->sizeX 是纹理的宽度。如果您知道宽度，您可以在这里填入，但计算机可以很容易的为您指出此值。
-		//TextureImage[0]->sizey 是纹理的高度。
-		//参数零是边框的值，一般就是“0”。 
-		//GL_RGB 告诉OpenGL图像数据由红、绿、蓝三色数据组成。
-		//GL_UNSIGNED_BYTE 意味着组成图像的数据是无符号字节类型的。
-		//最后... TextureImage[0]->data 告诉OpenGL纹理数据的来源。此例中指向存放在 TextureImage[0] 记录中的数据。 
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexImage2D(GL_TEXTURE_2D, 0, 3, TextureImage[0]->sizeX, TextureImage[0]->sizeY, 0, GL_RGB, GL_UNSIGNED_BYTE, TextureImage[0]->data);
+
+		// Create Linear Filtered Texture
+		glBindTexture(GL_TEXTURE_2D, texture[1]);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexImage2D(GL_TEXTURE_2D, 0, 3, TextureImage[0]->sizeX, TextureImage[0]->sizeY, 0, GL_RGB, GL_UNSIGNED_BYTE, TextureImage[0]->data);
+
+		// Create MipMapped Texture
+		glBindTexture(GL_TEXTURE_2D, texture[2]);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
+		gluBuild2DMipmaps(GL_TEXTURE_2D, 3, TextureImage[0]->sizeX, TextureImage[0]->sizeY, GL_RGB, GL_UNSIGNED_BYTE, TextureImage[0]->data);
+
 		//下面的两行告诉OpenGL在显示图像时，当它比放大得原始的纹理大 ( GL_TEXTURE_MAG_FILTER )或缩小得比原始得纹理小( GL_TEXTURE_MIN_FILTER )时OpenGL采用的滤波方式。
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -158,20 +174,24 @@ GLvoid ReSizeGLScene(GLsizei width, GLsizei height)		// Resize And Initialize Th
 */
 int InitGL(GLvoid)										// 此处开始对OpenGL进行所有设置
 {
-	if (!LoadGLTextures())								// Jump To Texture Loading Routine ( NEW )
+	if (!LoadGLTextures())								// Jump To Texture Loading Routine
 	{
 		return FALSE;									// If Texture Didn't Load Return FALSE
 	}
-	glEnable(GL_TEXTURE_2D);							// Enable Texture Mapping ( NEW )
-	glShadeModel(GL_SMOOTH);							// 启用阴影平滑 
-	glClearColor(0.0f, 0.0f, 0.0f, 0.5f);				// 黑色背景 
-														//接下来的三行必须做的是关于depth buffer(深度缓存)的。
-	glClearDepth(1.0f);									// 设置深度缓存
-	glEnable(GL_DEPTH_TEST);							// 启用深度测试   
-	glDepthFunc(GL_LEQUAL);								// 所作深度测试的类型
-														//接着告诉OpenGL我们希望进行最好的透视修正。
-	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);	// 告诉系统对透视进行修正
-	return TRUE;										// Initialization Went OK
+
+	glEnable(GL_TEXTURE_2D);							// Enable Texture Mapping
+	glShadeModel(GL_SMOOTH);							// Enable Smooth Shading
+	glClearColor(0.0f, 0.0f, 0.0f, 0.5f);				// Black Background
+	glClearDepth(1.0f);									// Depth Buffer Setup
+	glEnable(GL_DEPTH_TEST);							// Enables Depth Testing
+	glDepthFunc(GL_LEQUAL);								// The Type Of Depth Testing To Do
+	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);	// Really Nice Perspective Calculations
+
+	glLightfv(GL_LIGHT1, GL_AMBIENT, LightAmbient);		// Setup The Ambient Light
+	glLightfv(GL_LIGHT1, GL_DIFFUSE, LightDiffuse);		// Setup The Diffuse Light
+	glLightfv(GL_LIGHT1, GL_POSITION, LightPosition);	// Position The Light
+	glEnable(GL_LIGHT1);								// Enable Light One
+	return TRUE;										// Initialization Went OK									// Initialization Went OK
 }
 
 /*
@@ -182,50 +202,54 @@ int DrawGLScene(GLvoid)									// Here's Where We Do All The Drawing
 {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);	// Clear The Screen And The Depth Buffer
 	glLoadIdentity();									// Reset The View
-	glTranslatef(0.0f, 0.0f, -5.0f);
+	glTranslatef(0.0f, 0.0f, z);
 
 	glRotatef(xrot, 1.0f, 0.0f, 0.0f);
 	glRotatef(yrot, 0.0f, 1.0f, 0.0f);
-	glRotatef(zrot, 0.0f, 0.0f, 1.0f);
 
-	glBindTexture(GL_TEXTURE_2D, texture[0]);
+	glBindTexture(GL_TEXTURE_2D, texture[filter]);
 
 	glBegin(GL_QUADS);
 	// Front Face
+	glNormal3f(0.0f, 0.0f, 1.0f);
 	glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f, -1.0f, 1.0f);
 	glTexCoord2f(1.0f, 0.0f); glVertex3f(1.0f, -1.0f, 1.0f);
 	glTexCoord2f(1.0f, 1.0f); glVertex3f(1.0f, 1.0f, 1.0f);
 	glTexCoord2f(0.0f, 1.0f); glVertex3f(-1.0f, 1.0f, 1.0f);
 	// Back Face
+	glNormal3f(0.0f, 0.0f, -1.0f);
 	glTexCoord2f(1.0f, 0.0f); glVertex3f(-1.0f, -1.0f, -1.0f);
 	glTexCoord2f(1.0f, 1.0f); glVertex3f(-1.0f, 1.0f, -1.0f);
 	glTexCoord2f(0.0f, 1.0f); glVertex3f(1.0f, 1.0f, -1.0f);
 	glTexCoord2f(0.0f, 0.0f); glVertex3f(1.0f, -1.0f, -1.0f);
 	// Top Face
+	glNormal3f(0.0f, 1.0f, 0.0f);
 	glTexCoord2f(0.0f, 1.0f); glVertex3f(-1.0f, 1.0f, -1.0f);
 	glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f, 1.0f, 1.0f);
 	glTexCoord2f(1.0f, 0.0f); glVertex3f(1.0f, 1.0f, 1.0f);
 	glTexCoord2f(1.0f, 1.0f); glVertex3f(1.0f, 1.0f, -1.0f);
 	// Bottom Face
+	glNormal3f(0.0f, -1.0f, 0.0f);
 	glTexCoord2f(1.0f, 1.0f); glVertex3f(-1.0f, -1.0f, -1.0f);
 	glTexCoord2f(0.0f, 1.0f); glVertex3f(1.0f, -1.0f, -1.0f);
 	glTexCoord2f(0.0f, 0.0f); glVertex3f(1.0f, -1.0f, 1.0f);
 	glTexCoord2f(1.0f, 0.0f); glVertex3f(-1.0f, -1.0f, 1.0f);
 	// Right face
+	glNormal3f(1.0f, 0.0f, 0.0f);
 	glTexCoord2f(1.0f, 0.0f); glVertex3f(1.0f, -1.0f, -1.0f);
 	glTexCoord2f(1.0f, 1.0f); glVertex3f(1.0f, 1.0f, -1.0f);
 	glTexCoord2f(0.0f, 1.0f); glVertex3f(1.0f, 1.0f, 1.0f);
 	glTexCoord2f(0.0f, 0.0f); glVertex3f(1.0f, -1.0f, 1.0f);
 	// Left Face
+	glNormal3f(-1.0f, 0.0f, 0.0f);
 	glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f, -1.0f, -1.0f);
 	glTexCoord2f(1.0f, 0.0f); glVertex3f(-1.0f, -1.0f, 1.0f);
 	glTexCoord2f(1.0f, 1.0f); glVertex3f(-1.0f, 1.0f, 1.0f);
 	glTexCoord2f(0.0f, 1.0f); glVertex3f(-1.0f, 1.0f, -1.0f);
 	glEnd();
 
-	xrot += 0.3f;
-	yrot += 0.2f;
-	zrot += 0.4f;
+	xrot += xspeed;
+	yrot += yspeed;
 	return TRUE;										// Keep Going
 }
 
@@ -556,80 +580,125 @@ LRESULT CALLBACK WndProc(HWND	hWnd,				// Handle For This Window 窗口的句柄
 	return DefWindowProc(hWnd, uMsg, wParam, lParam);
 }
 
-int WINAPI WinMain(HINSTANCE	hInstance,			// 当前窗口实例
-	HINSTANCE	hPrevInstance,		// 前一个窗口实例 
-	LPSTR		lpCmdLine,			// 命令行参数
-	int			nCmdShow)			// 窗口显示状态 
+int WINAPI WinMain(HINSTANCE	hInstance,			// Instance
+	HINSTANCE	hPrevInstance,		// Previous Instance
+	LPSTR		lpCmdLine,			// Command Line Parameters
+	int			nCmdShow)			// Window Show State
 {
-	//我们设置两个变量。
-	//msg 用来检查是否有消息等待处理。
-	//done的初始值设为FALSE。这意味着我们的程序仍未完成运行。只要程序done保持FALSE，程序继续运行。一旦done的值改变为TRUE，程序退出。 
-	MSG		msg;									// Windows Message Structure Windowsx消息结构
-	BOOL	done = FALSE;							// Bool Variable To Exit Loop 用来退出循环的Bool 变量
+	MSG		msg;									// Windows Message Structure
+	BOOL	done = FALSE;								// Bool Variable To Exit Loop
 
-													// Ask The User Which Screen Mode They Prefer
-	if (MessageBox(NULL, "你想在全屏模式下运行么？", "设置全屏模式", MB_YESNO | MB_ICONQUESTION) == IDNO)
+														// Ask The User Which Screen Mode They Prefer
+	if (MessageBox(NULL, "Would You Like To Run In Fullscreen Mode?", "Start FullScreen?", MB_YESNO | MB_ICONQUESTION) == IDNO)
 	{
 		fullscreen = FALSE;							// Windowed Mode
 	}
-	//接着创建OpenGL窗口。CreateGLWindow函数的参数依次为标题、宽度、高度、色彩深度，以及全屏标志。
-	//就这么简单！我很欣赏这段代码的简洁。
-	//如果未能创建成功，函数返回FALSE。程序立即退出。 
+
 	// Create Our OpenGL Window
-	if (!CreateGLWindow("NeHe's颜色实例", 640, 480, 16, fullscreen))
+	if (!CreateGLWindow("NeHe's Textures, Lighting & Keyboard Tutorial", 640, 480, 16, fullscreen))
 	{
 		return 0;									// Quit If Window Was Not Created
 	}
 
 	while (!done)									// Loop That Runs While done=FALSE
 	{
-		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))	// Is There A Message Waiting? 有消息在等待吗?
+		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))	// Is There A Message Waiting?
 		{
-			if (msg.message == WM_QUIT)				// Have We Received A Quit Message? 收到退出消息?
+			if (msg.message == WM_QUIT)				// Have We Received A Quit Message?
 			{
-				done = TRUE;						// If So done=TRUE
+				done = TRUE;							// If So done=TRUE
 			}
-			else									// If Not, Deal With Window Messages 
-			{										//如果不是退出消息，我们翻译消息，然后发送消息，使得WndProc() 或 Windows能够处理他们。 
-				TranslateMessage(&msg);				// Translate The Message 翻译消息
-				DispatchMessage(&msg);				// Dispatch The Message 发送消息
+			else									// If Not, Deal With Window Messages
+			{
+				TranslateMessage(&msg);				// Translate The Message
+				DispatchMessage(&msg);				// Dispatch The Message
 			}
 		}
 		else										// If There Are No Messages
 		{
 			// Draw The Scene.  Watch For ESC Key And Quit Messages From DrawGLScene()
-			//如果没有消息，绘制我们的OpenGL场景。代码的第一行查看窗口是否激活。如果按下ESC键，done变量被设为TRUE，程序将会退出。 
-			if (active)								// Program Active? 程序激活的么?
+			if ((active && !DrawGLScene()) || keys[VK_ESCAPE])	// Active?  Was There A Quit Received?
 			{
-				if (keys[VK_ESCAPE])				// Was ESC Pressed?
-				{
-					done = TRUE;					// ESC Signalled A Quit
-				}
-				else								// Not Time To Quit, Update Screen 不是退出的时候，刷新屏幕
-				{
-					DrawGLScene();					// Draw The Scene 绘制场景 
-					SwapBuffers(hDC);				// Swap Buffers (Double Buffering) 交换缓存 (双缓存)
-				}
+				done = TRUE;							// ESC or DrawGLScene Signalled A Quit
 			}
-			//下面的一点代码是最近新加的(05-01-00)。允许用户按下F1键在全屏模式和窗口模式间切换。
-			if (keys[VK_F1])						// Is F1 Being Pressed?
+			else									// Not Time To Quit, Update Screen
 			{
-				keys[VK_F1] = FALSE;					// If So Make Key FALSE
-				KillGLWindow();						// Kill Our Current Window
-				fullscreen = !fullscreen;				// Toggle Fullscreen / Windowed Mode
-														// Recreate Our OpenGL Window
-				if (!CreateGLWindow("NeHe's 第一个多边形程序", 640, 480, 16, fullscreen))
+				SwapBuffers(hDC);					// Swap Buffers (Double Buffering)
+				if (keys['L'] && !lp)
 				{
-					return 0;						// Quit If Window Was Not Created
+					lp = TRUE;
+					light = !light;
+					if (!light)
+					{
+						glDisable(GL_LIGHTING);
+					}
+					else
+					{
+						glEnable(GL_LIGHTING);
+					}
+				}
+				if (!keys['L'])
+				{
+					lp = FALSE;
+				}
+				if (keys['F'] && !fp)
+				{
+					fp = TRUE;
+					filter += 1;
+					if (filter>2)
+					{
+						filter = 0;
+					}
+				}
+				if (!keys['F'])
+				{
+					fp = FALSE;
+				}
+				if (keys[VK_PRIOR])
+				{
+					z -= 0.02f;
+				}
+				if (keys[VK_NEXT])
+				{
+					z += 0.02f;
+				}
+				if (keys[VK_UP])
+				{
+					xspeed -= 0.01f;
+				}
+				if (keys[VK_DOWN])
+				{
+					xspeed += 0.01f;
+				}
+				if (keys[VK_RIGHT])
+				{
+					yspeed += 0.01f;
+				}
+				if (keys[VK_LEFT])
+				{
+					yspeed -= 0.01f;
+				}
+
+				if (keys[VK_F1])						// Is F1 Being Pressed?
+				{
+					keys[VK_F1] = FALSE;					// If So Make Key FALSE
+					KillGLWindow();						// Kill Our Current Window
+					fullscreen = !fullscreen;				// Toggle Fullscreen / Windowed Mode
+															// Recreate Our OpenGL Window
+					if (!CreateGLWindow("NeHe's Textures, Lighting & Keyboard Tutorial", 640, 480, 16, fullscreen))
+					{
+						return 0;						// Quit If Window Was Not Created
+					}
 				}
 			}
 		}
 	}
-	//如果done变量不再是FALSE，程序退出。正常销毁OpenGL窗口，将所有的内存释放，退出程序。
+
 	// Shutdown
 	KillGLWindow();									// Kill The Window
 	return (msg.wParam);							// Exit The Program
 }
+
 
 
 /*
