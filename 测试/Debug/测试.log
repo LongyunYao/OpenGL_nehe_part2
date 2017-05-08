@@ -1,4 +1,4 @@
 ﻿  测试.cpp
-d:\visual_studio_workspace\测试\测试\测试.cpp(460): warning C4838: 从“int”转换到“BYTE”需要收缩转换
+d:\visual_studio_workspace\测试\测试\测试.cpp(466): warning C4838: 从“int”转换到“BYTE”需要收缩转换
   测试.vcxproj -> D:\visual_studio_workspace\测试\Debug\测试.exe
   测试.vcxproj -> D:\visual_studio_workspace\测试\Debug\测试.pdb (Full PDB)

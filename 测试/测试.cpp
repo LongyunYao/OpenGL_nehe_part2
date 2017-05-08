@@ -41,6 +41,8 @@ bool    fullscreen = TRUE;		// 全屏标志缺省，缺省设定成全屏模式
 bool	light;				// Lighting ON/OFF ( NEW )
 bool	lp;					// L Pressed? ( NEW )
 bool	fp;					// F Pressed? ( NEW )
+bool    blend;				// Blending OFF/ON? ( NEW )
+bool	bp;					// B Pressed? ( NEW )
 
 
 GLfloat	xrot;				// X Rotation
@@ -94,7 +96,7 @@ int LoadGLTextures()								// Load Bitmaps And Convert To Textures
 
 													// Load The Bitmap, Check For Errors, If Bitmap's Not Found Quit
 	//尝试加载位图，并将其转换为纹理。
-	if (TextureImage[0] = LoadBMP("Data/Crate.bmp"))
+	if (TextureImage[0] = LoadBMP("Data/Glass.bmp"))
 	{
 		Status = TRUE;								// Set The Status To TRUE
 		//现在使用中 TextureImage[0] 的数据创建纹理。
@@ -191,7 +193,11 @@ int InitGL(GLvoid)										// 此处开始对OpenGL进行所有设置
 	glLightfv(GL_LIGHT1, GL_DIFFUSE, LightDiffuse);		// Setup The Diffuse Light
 	glLightfv(GL_LIGHT1, GL_POSITION, LightPosition);	// Position The Light
 	glEnable(GL_LIGHT1);								// Enable Light One
-	return TRUE;										// Initialization Went OK									// Initialization Went OK
+
+	glColor4f(1.0f, 1.0f, 1.0f, 0.5);					// Full Brightness.  50% Alpha
+	//源代码似乎有问题，在参考部分文档之后我对源代码进行了稍稍的修改
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE);	// Set The Blending Function For Translucency
+	return TRUE;										// Initialization Went OK
 }
 
 /*
@@ -624,71 +630,93 @@ int WINAPI WinMain(HINSTANCE	hInstance,			// Instance
 			else									// Not Time To Quit, Update Screen
 			{
 				SwapBuffers(hDC);					// Swap Buffers (Double Buffering)
-				if (keys['L'] && !lp)
+				
+			}
+			if (keys['L'] && !lp)
+			{
+				lp = TRUE;
+				light = !light;
+				if (!light)
 				{
-					lp = TRUE;
-					light = !light;
-					if (!light)
-					{
-						glDisable(GL_LIGHTING);
-					}
-					else
-					{
-						glEnable(GL_LIGHTING);
-					}
+					glDisable(GL_LIGHTING);
 				}
-				if (!keys['L'])
+				else
 				{
-					lp = FALSE;
+					glEnable(GL_LIGHTING);
 				}
-				if (keys['F'] && !fp)
+			}
+			if (!keys['L'])
+			{
+				lp = FALSE;
+			}
+			if (keys['F'] && !fp)
+			{
+				fp = TRUE;
+				filter += 1;
+				if (filter>2)
 				{
-					fp = TRUE;
-					filter += 1;
-					if (filter>2)
-					{
-						filter = 0;
-					}
+					filter = 0;
 				}
-				if (!keys['F'])
+			}
+			if (!keys['F'])
+			{
+				fp = FALSE;
+			}
+			if (keys[VK_PRIOR])
+			{
+				z -= 0.02f;
+			}
+			if (keys[VK_NEXT])
+			{
+				z += 0.02f;
+			}
+			if (keys[VK_UP])
+			{
+				xspeed -= 0.01f;
+			}
+			if (keys[VK_DOWN])
+			{
+				xspeed += 0.01f;
+			}
+			if (keys[VK_RIGHT])
+			{
+				yspeed += 0.01f;
+			}
+			if (keys[VK_LEFT])
+			{
+				yspeed -= 0.01f;
+			}
+			// Blending Code Starts Here
+			if (keys['B'] && !bp)
+			{
+				bp = TRUE;
+				blend = !blend;
+				if (blend)
 				{
-					fp = FALSE;
+					glEnable(GL_BLEND);			// Turn Blending On
+					glDisable(GL_DEPTH_TEST);	// Turn Depth Testing Off
 				}
-				if (keys[VK_PRIOR])
+				else
 				{
-					z -= 0.02f;
+					glDisable(GL_BLEND);		// Turn Blending Off
+					glEnable(GL_DEPTH_TEST);	// Turn Depth Testing On
 				}
-				if (keys[VK_NEXT])
-				{
-					z += 0.02f;
-				}
-				if (keys[VK_UP])
-				{
-					xspeed -= 0.01f;
-				}
-				if (keys[VK_DOWN])
-				{
-					xspeed += 0.01f;
-				}
-				if (keys[VK_RIGHT])
-				{
-					yspeed += 0.01f;
-				}
-				if (keys[VK_LEFT])
-				{
-					yspeed -= 0.01f;
-				}
+			}
+			if (!keys['B'])
+			{
+				bp = FALSE;
+			}
+			// Blending Code Ends Here
 
-				if (keys[VK_F1])						// Is F1 Being Pressed?
+			if (keys[VK_F1])						// Is F1 Being Pressed?
+			{
+				keys[VK_F1] = FALSE;					// If So Make Key FALSE
+				KillGLWindow();						// Kill Our Current Window
+				fullscreen = !fullscreen;				// Toggle Fullscreen / Windowed Mode
+														// Recreate Our OpenGL Window
+				if (!CreateGLWindow("NeHe's Textures, Lighting & Keyboard Tutorial", 640, 480, 16, fullscreen))
 				{
-					keys[VK_F1] = FALSE;					// If So Make Key FALSE
-					KillGLWindow();						// Kill Our Current Window
-					fullscreen = !fullscreen;				// Toggle Fullscreen / Windowed Mode
-															// Recreate Our OpenGL Window
-					if (!CreateGLWindow("NeHe's Textures, Lighting & Keyboard Tutorial", 640, 480, 16, fullscreen))
-					{
-						return 0;						// Quit If Window Was Not Created
-					}
+					return 0;						// Quit If Window Was Not Created
 				}
 			}
 		}
