@@ -1,14 +1,15 @@
 /*
-*		This Code Was Created By Jeff Molofee 2000
+*		This Code Was Created By bosco / Jeff Molofee 2000
 *		A HUGE Thanks To Fredric Echols For Cleaning Up
 *		And Optimizing The Base Code, Making It More Flexible!
 *		If You've Found This Code Useful, Please Let Me Know.
 *		Visit My Site At nehe.gamedev.net
 */
 
-#include <windows.h>		// Header File For Windows
 #include "stdafx.h"
+#include <windows.h>		// Header File For Windows
 #include <stdio.h>			// Header File For Standard Input/Output
+#include <math.h>			// Header File For The Math Library
 #include <gl\gl.h>			// Header File For The OpenGL32 Library
 #include <gl\glu.h>			// Header File For The GLu32 Library
 #include <gl\glaux.h>		// Header File For The Glaux Library
@@ -22,80 +23,71 @@ bool	keys[256];			// Array Used For The Keyboard Routine
 bool	active = TRUE;		// Window Active Flag Set To TRUE By Default
 bool	fullscreen = TRUE;	// Fullscreen Flag Set To Fullscreen Mode By Default
 
-bool	twinkle;			// Twinkling Stars
-bool	tp;					// 'T' Key Pressed?
+float points[45][45][3];    // The Array For The Points On The Grid Of Our "Wave"
+int wiggle_count = 0;		// Counter Used To Control How Fast Flag Waves
 
-const	int num = 50;				// Number Of Stars To Draw
+GLfloat	xrot;				// X Rotation ( NEW )
+GLfloat	yrot;				// Y Rotation ( NEW )
+GLfloat	zrot;				// Z Rotation ( NEW )
+GLfloat hold;				// Temporarily Holds A Floating Point Value
 
-typedef struct				// Create A Structure For Star
-{
-	int r, g, b;			// Stars Color
-	GLfloat dist,			// Stars Distance From Center
-		angle;			// Stars Current Angle
-}
-stars;
-stars star[num];			// Need To Keep Track Of 'num' Stars
-
-GLfloat	zoom = -15.0f;		// Distance Away From Stars
-GLfloat tilt = 90.0f;			// Tilt The View
-GLfloat	spin;				// Spin Stars
-
-GLuint	loop;				// General Loop Variable
-GLuint	texture[1];			// Storage For One textures
+GLuint	texture[1];			// Storage For One Texture ( NEW )
 
 LRESULT	CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);	// Declaration For WndProc
 
-AUX_RGBImageRec *LoadBMP(char *Filename)                // Loads A Bitmap Image
+AUX_RGBImageRec *LoadBMP(char *Filename)				// Loads A Bitmap Image
 {
-	FILE *File = NULL;                                // File Handle
+	FILE *File = NULL;									// File Handle
 
-	if (!Filename)                                  // Make Sure A Filename Was Given
+	if (!Filename)										// Make Sure A Filename Was Given
 	{
-		return NULL;                            // If Not Return NULL
+		return NULL;									// If Not Return NULL
 	}
 
-	File = fopen(Filename, "r");                       // Check To See If The File Exists
+	File = fopen(Filename, "r");							// Check To See If The File Exists
 
-	if (File)                                       // Does The File Exist?
+	if (File)											// Does The File Exist?
 	{
-		fclose(File);                           // Close The Handle
-		return auxDIBImageLoad(Filename);       // Load The Bitmap And Return A Pointer
+		fclose(File);									// Close The Handle
+		return auxDIBImageLoad(Filename);				// Load The Bitmap And Return A Pointer
 	}
-	return NULL;                                    // If Load Failed Return NULL
+
+	return NULL;										// If Load Failed Return NULL
 }
 
-int LoadGLTextures()                                    // Load Bitmaps And Convert To Textures
+int LoadGLTextures()									// Load Bitmaps And Convert To Textures
 {
-	int Status = FALSE;                               // Status Indicator
+	int Status = FALSE;									// Status Indicator
 
-	AUX_RGBImageRec *TextureImage[1];               // Create Storage Space For The Texture
+	AUX_RGBImageRec *TextureImage[1];					// Create Storage Space For The Texture
 
-	memset(TextureImage, 0, sizeof(void *) * 1);        // Set The Pointer To NULL
+	memset(TextureImage, 0, sizeof(void *) * 1);           	// Set The Pointer To NULL
 
-														// Load The Bitmap, Check For Errors, If Bitmap's Not Found Quit
-	if (TextureImage[0] = LoadBMP("Data/Star.bmp"))
+															// Load The Bitmap, Check For Errors, If Bitmap's Not Found Quit
+	if (TextureImage[0] = LoadBMP("Data/Tim.bmp"))
 	{
-		Status = TRUE;                            // Set The Status To TRUE
+		Status = TRUE;									// Set The Status To TRUE
 
-		glGenTextures(1, &texture[0]);          // Create One Texture
+		glGenTextures(1, &texture[0]);					// Create The Texture
 
-												// Create Linear Filtered Texture
+														// Typical Texture Generation Using Data From The Bitmap
 		glBindTexture(GL_TEXTURE_2D, texture[0]);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexImage2D(GL_TEXTURE_2D, 0, 3, TextureImage[0]->sizeX, TextureImage[0]->sizeY, 0, GL_RGB, GL_UNSIGNED_BYTE, TextureImage[0]->data);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	}
-	if (TextureImage[0])                            // If Texture Exists
+
+	if (TextureImage[0])									// If Texture Exists
 	{
-		if (TextureImage[0]->data)              // If Texture Image Exists
+		if (TextureImage[0]->data)							// If Texture Image Exists
 		{
-			free(TextureImage[0]->data);    // Free The Texture Image Memory
+			free(TextureImage[0]->data);					// Free The Texture Image Memory
 		}
 
-		free(TextureImage[0]);                  // Free The Image Structure
+		free(TextureImage[0]);								// Free The Image Structure
 	}
 
-	return Status;                                  // Return The Status
+	return Status;										// Return The Status
 }
 
 GLvoid ReSizeGLScene(GLsizei width, GLsizei height)		// Resize And Initialize The GL Window
@@ -119,77 +111,98 @@ GLvoid ReSizeGLScene(GLsizei width, GLsizei height)		// Resize And Initialize Th
 
 int InitGL(GLvoid)										// All Setup For OpenGL Goes Here
 {
-	if (!LoadGLTextures())								// Jump To Texture Loading Routine
+	if (!LoadGLTextures())								// Jump To Texture Loading Routine ( NEW )
 	{
 		return FALSE;									// If Texture Didn't Load Return FALSE
 	}
 
-	glEnable(GL_TEXTURE_2D);							// Enable Texture Mapping
+	glEnable(GL_TEXTURE_2D);							// Enable Texture Mapping ( NEW )
 	glShadeModel(GL_SMOOTH);							// Enable Smooth Shading
 	glClearColor(0.0f, 0.0f, 0.0f, 0.5f);				// Black Background
 	glClearDepth(1.0f);									// Depth Buffer Setup
+	glEnable(GL_DEPTH_TEST);							// Enables Depth Testing
+	glDepthFunc(GL_LEQUAL);								// The Type Of Depth Testing To Do
 	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);	// Really Nice Perspective Calculations
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE);					// Set The Blending Function For Translucency
-	glEnable(GL_BLEND);
+	glPolygonMode(GL_BACK, GL_FILL);					// Back Face Is Solid
+	glPolygonMode(GL_FRONT, GL_LINE);					// Front Face Is Made Of Lines
 
-	for (loop = 0; loop<num; loop++)
+	for (int x = 0; x<45; x++)
 	{
-		star[loop].angle = 0.0f;
-		star[loop].dist = (float(loop) / num)*5.0f;
-		star[loop].r = rand() % 256;
-		star[loop].g = rand() % 256;
-		star[loop].b = rand() % 256;
+		for (int y = 0; y<45; y++)
+		{
+			points[x][y][0] = float((x / 5.0f) - 4.5f);
+			points[x][y][1] = float((y / 5.0f) - 4.5f);
+			points[x][y][2] = float(sin((((x / 5.0f)*40.0f) / 360.0f)*3.141592654*2.0f));
+		}
 	}
+
 	return TRUE;										// Initialization Went OK
 }
 
 int DrawGLScene(GLvoid)									// Here's Where We Do All The Drawing
 {
+	int x, y;
+	float float_x, float_y, float_xb, float_yb;
+
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);	// Clear The Screen And The Depth Buffer
-	glBindTexture(GL_TEXTURE_2D, texture[0]);			// Select Our Texture
+	glLoadIdentity();									// Reset The View
 
-	for (loop = 0; loop<num; loop++)						// Loop Through All The Stars
+	glTranslatef(0.0f, 0.0f, -12.0f);
+
+	glRotatef(xrot, 1.0f, 0.0f, 0.0f);
+	//glRotatef(yrot, 0.0f, 1.0f, 0.0f);
+	//glRotatef(zrot, 0.0f, 0.0f, 1.0f);
+
+	glBindTexture(GL_TEXTURE_2D, texture[0]);
+
+	glBegin(GL_QUADS);
+	for (x = 0; x < 44; x++)
 	{
-		glLoadIdentity();								// Reset The View Before We Draw Each Star
-		glTranslatef(0.0f, 0.0f, zoom);					// Zoom Into The Screen (Using The Value In 'zoom')
-		glRotatef(tilt, 1.0f, 0.0f, 0.0f);					// Tilt The View (Using The Value In 'tilt')
-		glRotatef(star[loop].angle, 0.0f, 1.0f, 0.0f);		// Rotate To The Current Stars Angle
-		glTranslatef(star[loop].dist, 0.0f, 0.0f);		// Move Forward On The X Plane
-		glRotatef(-star[loop].angle, 0.0f, 1.0f, 0.0f);	// Cancel The Current Stars Angle
-		glRotatef(-tilt, 1.0f, 0.0f, 0.0f);				// Cancel The Screen Tilt
-
-		if (twinkle)
+		for (y = 0; y < 44; y++)
 		{
-			glColor4ub(star[(num - loop) - 1].r, star[(num - loop) - 1].g, star[(num - loop) - 1].b, 255);
-			glBegin(GL_QUADS);
-			glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f, -1.0f, 0.0f);
-			glTexCoord2f(1.0f, 0.0f); glVertex3f(1.0f, -1.0f, 0.0f);
-			glTexCoord2f(1.0f, 1.0f); glVertex3f(1.0f, 1.0f, 0.0f);
-			glTexCoord2f(0.0f, 1.0f); glVertex3f(-1.0f, 1.0f, 0.0f);
-			glEnd();
-		}
+			float_x = float(x) / 44.0f;
+			float_y = float(y) / 44.0f;
+			float_xb = float(x + 1) / 44.0f;
+			float_yb = float(y + 1) / 44.0f;
 
-		glRotatef(spin, 0.0f, 0.0f, 1.0f);
-		glColor4ub(star[loop].r, star[loop].g, star[loop].b, 255);
-		glBegin(GL_QUADS);
-		glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f, -1.0f, 0.0f);
-		glTexCoord2f(1.0f, 0.0f); glVertex3f(1.0f, -1.0f, 0.0f);
-		glTexCoord2f(1.0f, 1.0f); glVertex3f(1.0f, 1.0f, 0.0f);
-		glTexCoord2f(0.0f, 1.0f); glVertex3f(-1.0f, 1.0f, 0.0f);
-		glEnd();
+			glTexCoord2f(float_x, float_y);
+			glVertex3f(points[x][y][0], points[x][y][1], points[x][y][2]);
 
-		spin += 0.01f;
-		star[loop].angle += float(loop) / num;
-		star[loop].dist -= 0.01f;
-		if (star[loop].dist<0.0f)
-		{
-			star[loop].dist += 5.0f;
-			star[loop].r = rand() % 256;
-			star[loop].g = rand() % 256;
-			star[loop].b = rand() % 256;
+			glTexCoord2f(float_x, float_yb);
+			glVertex3f(points[x][y + 1][0], points[x][y + 1][1], points[x][y + 1][2]);
+
+			glTexCoord2f(float_xb, float_yb);
+			glVertex3f(points[x + 1][y + 1][0], points[x + 1][y + 1][1], points[x + 1][y + 1][2]);
+
+			glTexCoord2f(float_xb, float_y);
+			glVertex3f(points[x + 1][y][0], points[x + 1][y][1], points[x + 1][y][2]);
 		}
 	}
-	return TRUE;										// Everything Went OK
+	glEnd();
+
+	
+	if (wiggle_count == 16)
+	{
+		for (y = 0; y < 45; y++)
+		{
+			hold = points[0][y][2];
+			for (x = 0; x < 44; x++)
+			{
+				points[x][y][2] = points[x + 1][y][2];
+			}
+			points[44][y][2] = hold;
+		}
+		wiggle_count = 0;
+	}
+	
+
+	wiggle_count++;
+
+	xrot += 0.3f;
+	yrot += 0.2f;
+	zrot += 0.4f;
+
+	return TRUE;										// Keep Going
 }
 
 GLvoid KillGLWindow(GLvoid)								// Properly Kill The Window
@@ -481,7 +494,7 @@ int WINAPI WinMain(HINSTANCE	hInstance,			// Instance
 	}
 
 	// Create Our OpenGL Window
-	if (!CreateGLWindow("NeHe's Animated Blended Textures Tutorial", 640, 480, 16, fullscreen))
+	if (!CreateGLWindow("bosco & NeHe's Waving Texture Tutorial", 640, 480, 16, fullscreen))
 	{
 		return 0;									// Quit If Window Was Not Created
 	}
@@ -510,46 +523,17 @@ int WINAPI WinMain(HINSTANCE	hInstance,			// Instance
 			else									// Not Time To Quit, Update Screen
 			{
 				SwapBuffers(hDC);					// Swap Buffers (Double Buffering)
-				if (keys['T'] && !tp)
-				{
-					tp = TRUE;
-					twinkle = !twinkle;
-				}
-				if (!keys['T'])
-				{
-					tp = FALSE;
-				}
+			}
 
-				if (keys[VK_UP])
+			if (keys[VK_F1])						// Is F1 Being Pressed?
+			{
+				keys[VK_F1] = FALSE;					// If So Make Key FALSE
+				KillGLWindow();						// Kill Our Current Window
+				fullscreen = !fullscreen;				// Toggle Fullscreen / Windowed Mode
+														// Recreate Our OpenGL Window
+				if (!CreateGLWindow("bosco & NeHe's Waving Texture Tutorial", 640, 480, 16, fullscreen))
 				{
-					tilt -= 0.5f;
-				}
-
-				if (keys[VK_DOWN])
-				{
-					tilt += 0.5f;
-				}
-
-				if (keys[VK_PRIOR])
-				{
-					zoom -= 0.2f;
-				}
-
-				if (keys[VK_NEXT])
-				{
-					zoom += 0.2f;
-				}
-
-				if (keys[VK_F1])						// Is F1 Being Pressed?
-				{
-					keys[VK_F1] = FALSE;					// If So Make Key FALSE
-					KillGLWindow();						// Kill Our Current Window
-					fullscreen = !fullscreen;				// Toggle Fullscreen / Windowed Mode
-															// Recreate Our OpenGL Window
-					if (!CreateGLWindow("NeHe's Animated Blended Textures Tutorial", 640, 480, 16, fullscreen))
-					{
-						return 0;						// Quit If Window Was Not Created
-					}
+					return 0;						// Quit If Window Was Not Created
 				}
 			}
 		}
