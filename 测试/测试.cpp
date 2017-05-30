@@ -1,5 +1,5 @@
 /*
-*		This Code Was Created By bosco / Jeff Molofee 2000
+*		This Code Was Created By Jeff Molofee 2000
 *		A HUGE Thanks To Fredric Echols For Cleaning Up
 *		And Optimizing The Base Code, Making It More Flexible!
 *		If You've Found This Code Useful, Please Let Me Know.
@@ -9,7 +9,6 @@
 #include "stdafx.h"
 #include <windows.h>		// Header File For Windows
 #include <stdio.h>			// Header File For Standard Input/Output
-#include <math.h>			// Header File For The Math Library
 #include <gl\gl.h>			// Header File For The OpenGL32 Library
 #include <gl\glu.h>			// Header File For The GLu32 Library
 #include <gl\glaux.h>		// Header File For The Glaux Library
@@ -23,17 +22,90 @@ bool	keys[256];			// Array Used For The Keyboard Routine
 bool	active = TRUE;		// Window Active Flag Set To TRUE By Default
 bool	fullscreen = TRUE;	// Fullscreen Flag Set To Fullscreen Mode By Default
 
-float points[45][45][3];    // The Array For The Points On The Grid Of Our "Wave"
-int wiggle_count = 0;		// Counter Used To Control How Fast Flag Waves
+GLuint	texture[1];			// Storage For 1 Texture
+GLuint	box;				// Storage For The Box Display List
+GLuint	top;				// Storage For The Top Display List
+GLuint	xloop;				// Loop For X Axis
+GLuint	yloop;				// Loop For Y Axis
 
-GLfloat	xrot;				// X Rotation ( NEW )
-GLfloat	yrot;				// Y Rotation ( NEW )
-GLfloat	zrot;				// Z Rotation ( NEW )
-GLfloat hold;				// Temporarily Holds A Floating Point Value
+GLfloat	xrot;				// Rotates Cube On The X Axis
+GLfloat	yrot;				// Rotates Cube On The Y Axis
 
-GLuint	texture[1];			// Storage For One Texture ( NEW )
+static GLfloat boxcol[5][3] =
+{
+	// 亮:红，橙，黄，绿，蓝
+	{ 1.0f,0.0f,0.0f },
+	{ 1.0f,0.5f,0.0f },
+	{ 1.0f,1.0f,0.0f },
+	{ 0.0f,1.0f,0.0f },
+	{ 0.0f,1.0f,1.0f }
+};							// 盒子的颜色数组
+
+static GLfloat topcol[5][3] =
+{
+	// 暗:红，橙，黄，绿，蓝
+	{ .5f,0.0f,0.0f },
+	{ 0.5f,0.25f,0.0f },
+	{ 0.5f,0.5f,0.0f },
+	{ 0.0f,0.5f,0.0f },
+	{ 0.0f,0.5f,0.5f }
+};							// 顶部的颜色数组
 
 LRESULT	CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);	// Declaration For WndProc
+
+														// Build Cube Display Lists
+GLvoid BuildLists()
+{
+	// glGenLists(2)建立了两个显示列表的空间
+	//“box”指向第一个显示列表，任何时候调用“box”第一个显示列表就会显示出来。
+	box = glGenLists(2);									// Generate 2 Different Lists
+															// 第一个显示列表
+	glNewList(box, GL_COMPILE);							// Start With The Box List
+	glBegin(GL_QUADS);
+	// Bottom Face
+	glNormal3f(0.0f, -1.0f, 0.0f);						// 法向量
+	glTexCoord2f(1.0f, 1.0f); glVertex3f(-1.0f, -1.0f, -1.0f);
+	glTexCoord2f(0.0f, 1.0f); glVertex3f(1.0f, -1.0f, -1.0f);
+	glTexCoord2f(0.0f, 0.0f); glVertex3f(1.0f, -1.0f, 1.0f);
+	glTexCoord2f(1.0f, 0.0f); glVertex3f(-1.0f, -1.0f, 1.0f);
+	// Front Face
+	glNormal3f(0.0f, 0.0f, 1.0f);
+	glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f, -1.0f, 1.0f);
+	glTexCoord2f(1.0f, 0.0f); glVertex3f(1.0f, -1.0f, 1.0f);
+	glTexCoord2f(1.0f, 1.0f); glVertex3f(1.0f, 1.0f, 1.0f);
+	glTexCoord2f(0.0f, 1.0f); glVertex3f(-1.0f, 1.0f, 1.0f);
+	// Back Face
+	glNormal3f(0.0f, 0.0f, -1.0f);
+	glTexCoord2f(1.0f, 0.0f); glVertex3f(-1.0f, -1.0f, -1.0f);
+	glTexCoord2f(1.0f, 1.0f); glVertex3f(-1.0f, 1.0f, -1.0f);
+	glTexCoord2f(0.0f, 1.0f); glVertex3f(1.0f, 1.0f, -1.0f);
+	glTexCoord2f(0.0f, 0.0f); glVertex3f(1.0f, -1.0f, -1.0f);
+	// Right face
+	glNormal3f(1.0f, 0.0f, 0.0f);
+	glTexCoord2f(1.0f, 0.0f); glVertex3f(1.0f, -1.0f, -1.0f);
+	glTexCoord2f(1.0f, 1.0f); glVertex3f(1.0f, 1.0f, -1.0f);
+	glTexCoord2f(0.0f, 1.0f); glVertex3f(1.0f, 1.0f, 1.0f);
+	glTexCoord2f(0.0f, 0.0f); glVertex3f(1.0f, -1.0f, 1.0f);
+	// Left Face
+	glNormal3f(-1.0f, 0.0f, 0.0f);
+	glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f, -1.0f, -1.0f);
+	glTexCoord2f(1.0f, 0.0f); glVertex3f(-1.0f, -1.0f, 1.0f);
+	glTexCoord2f(1.0f, 1.0f); glVertex3f(-1.0f, 1.0f, 1.0f);
+	glTexCoord2f(0.0f, 1.0f); glVertex3f(-1.0f, 1.0f, -1.0f);
+	glEnd();
+	glEndList();
+	top = box + 1;											// Storage For "Top" Is "Box" Plus One
+	glNewList(top, GL_COMPILE);							// Now The "Top" Display List
+	glBegin(GL_QUADS);
+	// Top Face
+	glNormal3f(0.0f, 1.0f, 0.0f);
+	glTexCoord2f(0.0f, 1.0f); glVertex3f(-1.0f, 1.0f, -1.0f);
+	glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f, 1.0f, 1.0f);
+	glTexCoord2f(1.0f, 0.0f); glVertex3f(1.0f, 1.0f, 1.0f);
+	glTexCoord2f(1.0f, 1.0f); glVertex3f(1.0f, 1.0f, -1.0f);
+	glEnd();
+	glEndList();
+}
 
 AUX_RGBImageRec *LoadBMP(char *Filename)				// Loads A Bitmap Image
 {
@@ -64,7 +136,7 @@ int LoadGLTextures()									// Load Bitmaps And Convert To Textures
 	memset(TextureImage, 0, sizeof(void *) * 1);           	// Set The Pointer To NULL
 
 															// Load The Bitmap, Check For Errors, If Bitmap's Not Found Quit
-	if (TextureImage[0] = LoadBMP("Data/Tim.bmp"))
+	if (TextureImage[0] = LoadBMP("Data/Cube.bmp"))
 	{
 		Status = TRUE;									// Set The Status To TRUE
 
@@ -111,97 +183,49 @@ GLvoid ReSizeGLScene(GLsizei width, GLsizei height)		// Resize And Initialize Th
 
 int InitGL(GLvoid)										// All Setup For OpenGL Goes Here
 {
-	if (!LoadGLTextures())								// Jump To Texture Loading Routine ( NEW )
+	if (!LoadGLTextures())								// Jump To Texture Loading Routine
 	{
 		return FALSE;									// If Texture Didn't Load Return FALSE
 	}
+	//初始化的代码只有一点改变，加入了一行BuildList()。
+	//请注意代码的顺序，先读入纹理，然后建立显示列表，这样当我们建立显示列表的时候就可以将纹理贴到立方体上了。
+	BuildLists();										// Jump To The Code That Creates Our Display Lists
 
-	glEnable(GL_TEXTURE_2D);							// Enable Texture Mapping ( NEW )
+	glEnable(GL_TEXTURE_2D);							// Enable Texture Mapping
 	glShadeModel(GL_SMOOTH);							// Enable Smooth Shading
 	glClearColor(0.0f, 0.0f, 0.0f, 0.5f);				// Black Background
 	glClearDepth(1.0f);									// Depth Buffer Setup
 	glEnable(GL_DEPTH_TEST);							// Enables Depth Testing
 	glDepthFunc(GL_LEQUAL);								// The Type Of Depth Testing To Do
+														// Light0一般来说是在显卡中预先定义过的
+	glEnable(GL_LIGHT0);								// Quick And Dirty Lighting (Assumes Light0 Is Set Up)
+														// 使用灯光
+	glEnable(GL_LIGHTING);								// Enable Lighting
+														// 最后一行的GL_COLOR_MATERIAL使我们可以用颜色来贴纹理。
+	glEnable(GL_COLOR_MATERIAL);						// Enable Material Coloring
 	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);	// Really Nice Perspective Calculations
-	glPolygonMode(GL_BACK, GL_FILL);					// Back Face Is Solid
-	glPolygonMode(GL_FRONT, GL_LINE);					// Front Face Is Made Of Lines
-
-	for (int x = 0; x<45; x++)
-	{
-		for (int y = 0; y<45; y++)
-		{
-			points[x][y][0] = float((x / 5.0f) - 4.5f);
-			points[x][y][1] = float((y / 5.0f) - 4.5f);
-			points[x][y][2] = float(sin((((x / 5.0f)*40.0f) / 360.0f)*3.141592654*2.0f));
-		}
-	}
-
 	return TRUE;										// Initialization Went OK
 }
 
 int DrawGLScene(GLvoid)									// Here's Where We Do All The Drawing
 {
-	int x, y;
-	float float_x, float_y, float_xb, float_yb;
-
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);	// Clear The Screen And The Depth Buffer
-	glLoadIdentity();									// Reset The View
-
-	glTranslatef(0.0f, 0.0f, -12.0f);
-
-	glRotatef(xrot, 1.0f, 0.0f, 0.0f);
-	//glRotatef(yrot, 0.0f, 1.0f, 0.0f);
-	//glRotatef(zrot, 0.0f, 0.0f, 1.0f);
 
 	glBindTexture(GL_TEXTURE_2D, texture[0]);
-
-	glBegin(GL_QUADS);
-	for (x = 0; x < 44; x++)
+	for (yloop = 1; yloop<6; yloop++)
 	{
-		for (y = 0; y < 44; y++)
+		for (xloop = 0; xloop<yloop; xloop++)
 		{
-			float_x = float(x) / 44.0f;
-			float_y = float(y) / 44.0f;
-			float_xb = float(x + 1) / 44.0f;
-			float_yb = float(y + 1) / 44.0f;
-
-			glTexCoord2f(float_x, float_y);
-			glVertex3f(points[x][y][0], points[x][y][1], points[x][y][2]);
-
-			glTexCoord2f(float_x, float_yb);
-			glVertex3f(points[x][y + 1][0], points[x][y + 1][1], points[x][y + 1][2]);
-
-			glTexCoord2f(float_xb, float_yb);
-			glVertex3f(points[x + 1][y + 1][0], points[x + 1][y + 1][1], points[x + 1][y + 1][2]);
-
-			glTexCoord2f(float_xb, float_y);
-			glVertex3f(points[x + 1][y][0], points[x + 1][y][1], points[x + 1][y][2]);
+			glLoadIdentity();							// Reset The View
+			glTranslatef(1.4f + (float(xloop)*2.8f) - (float(yloop)*1.4f), ((6.0f - float(yloop))*2.4f) - 7.0f, -20.0f);
+			glRotatef(45.0f - (2.0f*yloop) + xrot, 1.0f, 0.0f, 0.0f);
+			glRotatef(45.0f + yrot, 0.0f, 1.0f, 0.0f);
+			glColor3fv(boxcol[yloop - 1]);
+			glCallList(box);
+			glColor3fv(topcol[yloop - 1]);
+			glCallList(top);
 		}
 	}
-	glEnd();
-
-	
-	if (wiggle_count == 16)
-	{
-		for (y = 0; y < 45; y++)
-		{
-			hold = points[0][y][2];
-			for (x = 0; x < 44; x++)
-			{
-				points[x][y][2] = points[x + 1][y][2];
-			}
-			points[44][y][2] = hold;
-		}
-		wiggle_count = 0;
-	}
-	
-
-	wiggle_count++;
-
-	xrot += 0.3f;
-	yrot += 0.2f;
-	zrot += 0.4f;
-
 	return TRUE;										// Keep Going
 }
 
@@ -494,7 +518,7 @@ int WINAPI WinMain(HINSTANCE	hInstance,			// Instance
 	}
 
 	// Create Our OpenGL Window
-	if (!CreateGLWindow("bosco & NeHe's Waving Texture Tutorial", 640, 480, 16, fullscreen))
+	if (!CreateGLWindow("NeHe's Display List Tutorial", 640, 480, 16, fullscreen))
 	{
 		return 0;									// Quit If Window Was Not Created
 	}
@@ -523,17 +547,33 @@ int WINAPI WinMain(HINSTANCE	hInstance,			// Instance
 			else									// Not Time To Quit, Update Screen
 			{
 				SwapBuffers(hDC);					// Swap Buffers (Double Buffering)
-			}
-
-			if (keys[VK_F1])						// Is F1 Being Pressed?
-			{
-				keys[VK_F1] = FALSE;					// If So Make Key FALSE
-				KillGLWindow();						// Kill Our Current Window
-				fullscreen = !fullscreen;				// Toggle Fullscreen / Windowed Mode
-														// Recreate Our OpenGL Window
-				if (!CreateGLWindow("bosco & NeHe's Waving Texture Tutorial", 640, 480, 16, fullscreen))
+				if (keys[VK_LEFT])
 				{
-					return 0;						// Quit If Window Was Not Created
+					yrot -= 0.2f;
+				}
+				if (keys[VK_RIGHT])
+				{
+					yrot += 0.2f;
+				}
+				if (keys[VK_UP])
+				{
+					xrot -= 0.2f;
+				}
+				if (keys[VK_DOWN])
+				{
+					xrot += 0.2f;
+				}
+
+				if (keys[VK_F1])						// Is F1 Being Pressed?
+				{
+					keys[VK_F1] = FALSE;					// If So Make Key FALSE
+					KillGLWindow();						// Kill Our Current Window
+					fullscreen = !fullscreen;				// Toggle Fullscreen / Windowed Mode
+															// Recreate Our OpenGL Window
+					if (!CreateGLWindow("NeHe's Display List Tutorial", 640, 480, 16, fullscreen))
+					{
+						return 0;						// Quit If Window Was Not Created
+					}
 				}
 			}
 		}
